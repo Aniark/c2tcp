@@ -1,0 +1,62 @@
+name: build
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+#  push:
+#  release:
+#    types: [released, edited]
+
+jobs:
+  build:
+    name: c2tcp
+    runs-on: ubuntu-18.04
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install deps
+        run: |
+         sudo apt update --quiet || true
+         sudo apt -yq --no-install-suggests --no-install-recommends install kernel-package libncurses5-dev libelf-dev p7zip-full
+         mkdir releases
+      - name: Build
+        run: |
+          wget http://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-4.9.0-19-amd64_4.9.320-2_amd64.deb
+          7z x *.deb
+          7z x *.tar
+          cp boot/config-4.9.0-19-amd64 .config
+          wget https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.13.1.tar.xz
+          tar xf linux-4.13.1.tar.xz
+          cd linux-4.13.1
+          wget https://raw.githubusercontent.com/Soheil-ab/c2tcp/master/linux-patch/linux-4-13-1-orca-c2tcp-0521.patch
+          patch -p1 < ./linux-4-13-1-orca-c2tcp-0521.patch
+          cp ../.config .
+          sed -i 's/CONFIG_MODULE_SIG*/#CONFIG_MODULE_SIG*/' .config
+          sed -i 's/CONFIG_DEBUG_INFO*/#CONFIG_DEBUG_INFO*/' .config
+          sed -i 's/CONFIG_SYSTEM_TRUSTED_KEYS*/#CONFIG_SYSTEM_TRUSTED_KEYS*/' .config
+          sed -i '11d' scripts/selinux/genheaders/genheaders.c
+          sed -i '35d' scripts/selinux/mdp/mdp.c
+          echo "#include <linux/socket.h>" >> scripts/selinux/genheaders/genheaders.c
+          echo "#include <linux/socket.h>" >> scripts/selinux/mdp/mdp.c
+          make oldconfig
+          make deb-pkg -j`nproc`
+      - name: Move bins to release dir
+        run: |
+          mv *.deb ${GITHUB_WORKSPACE}/releases
+      - name: Generate release tag
+        run: |
+          echo "::set-output name=release_tag::c2tcp"
+          touch release.txt
+          echo "Last updated on $(date +"%Y.%m.%d-%H:%M") UTC+08:00" >> release.txt
+      - name: Upload bins to release
+        uses: softprops/action-gh-release@v1
+        with:
+         tag_name: c2tcp
+         body_path: release.txt
+         files: releases/*
+      - name: Delete workflow runs
+        uses: GitRML/delete-workflow-runs@main
+        with:
+         retain_days: 1
+         keep_minimum_runs: 3
