@@ -26,6 +26,7 @@ jobs:
           7z x *.deb
           7z x *.tar
           cp boot/config-4.9.0-19-amd64 .config
+          rm -rf *.deb
           wget https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.13.1.tar.xz
           tar xf linux-4.13.1.tar.xz
           cd linux-4.13.1
